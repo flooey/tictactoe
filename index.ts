@@ -68,6 +68,9 @@ function resultToString(result: Result, indent: number = 0): string {
 }
 
 function compareResult(a: Result, b: Result): number {
+  if (a.kind !== b.kind) {
+    return a.kind === "final" ? -1 : 1;
+  }
   return resultToString(a).localeCompare(resultToString(b));
 }
 
