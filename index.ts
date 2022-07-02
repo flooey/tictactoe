@@ -144,9 +144,11 @@ function trimResult(result: Result, dominator: Dominator): Result {
   if (result.kind === "final") {
     return result;
   }
-  const possibles = result.choices.flatMap((c) =>
-    c.kind === "choice" && c.chooser === result.chooser ? c.choices : [c]
-  );
+  const possibles = result.choices
+    .filter((c) => c.kind === "final" || c.choices.length > 0)
+    .flatMap((c) =>
+      c.kind === "choice" && c.chooser === result.chooser ? c.choices : [c]
+    );
   const trimmedPossibles = trimPossibles(
     _.uniqWith(possibles, eq),
     dominator,
@@ -201,6 +203,20 @@ function reduce(
   p1Declined: Set<Outcome>,
   p2Declined: Set<Outcome>
 ): Result {
+  return doReduce(
+    doReduce(result, dominator, p1Declined, p2Declined),
+    dominator,
+    p1Declined,
+    p2Declined
+  );
+}
+
+function doReduce(
+  result: Result,
+  dominator: Dominator,
+  p1Declined: Set<Outcome>,
+  p2Declined: Set<Outcome>
+): Result {
   if (result.kind === "final") {
     return result;
   }
@@ -212,7 +228,7 @@ function reduce(
   const reduced = nonFinals.map((c) =>
     reduce(c, dominator, newP1Declined, newP2Declined)
   );
-  return trimResult(
+  const trimmed = trimResult(
     {
       kind: "choice",
       chooser: result.chooser,
@@ -220,6 +236,20 @@ function reduce(
     },
     dominator
   );
+  if (trimmed.kind === "final") {
+    return trimmed;
+  }
+  return {
+    kind: "choice",
+    chooser: trimmed.chooser,
+    choices: trimmed.choices.filter(
+      (c) =>
+        c.kind === "choice" ||
+        (trimmed.chooser === "P1"
+          ? !p1Declined.has(c.result)
+          : !p2Declined.has(c.result))
+    ),
+  };
 }
 
 function normalTicTacToe(a: Result, b: Result, p: Player) {
