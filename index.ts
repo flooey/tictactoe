@@ -26,9 +26,34 @@ function eq(a: Result, b: Result): boolean {
     a.chooser === b.chooser &&
     a.choices.length === b.choices.length
   ) {
-    return a.choices.every((c, i) => eq(c, b.choices[i]));
+    const bCopy = [...b.choices];
+    for (const aChoice of a.choices) {
+      const matched = bCopy.findIndex((c) => eq(aChoice, c));
+      if (matched == -1) {
+        return false;
+      }
+      bCopy.splice(matched, 1);
+    }
+    return true;
   }
   return false;
+}
+
+function union<T>(...sets: Set<T>[]): Set<T> {
+  const result = new Set<T>();
+  for (const s of sets) {
+    for (const el of s) {
+      result.add(el);
+    }
+  }
+  return result;
+}
+
+function allFinals(result: Result): Set<Player | null> {
+  if (result.kind === "final") {
+    return new Set([result.result]);
+  }
+  return union(...result.choices.map(allFinals));
 }
 
 function resultToString(result: Result, indent: number = 0): string {
@@ -130,11 +155,8 @@ function trimPossibles(
   );
   const trimmed: Result[] = [...finals];
   for (const nonFinal of nonFinals) {
-    if (
-      !nonFinal.choices.every(
-        (r) => r.kind === "final" && finals.some((f) => f.result === r.result)
-      )
-    ) {
+    const subFinals = [...allFinals(nonFinal)];
+    if (!subFinals.every((r) => finals.some((f) => f.result === r))) {
       trimmed.push(nonFinal);
     }
   }
@@ -146,11 +168,11 @@ function trimPossibles(
         !toRemove.has(j) &&
         dominator(trimmed[i], trimmed[j], player)
       ) {
-        console.log(
-          `${resultToString(trimmed[i])} dominates ${resultToString(
-            trimmed[j]
-          )}`
-        );
+        // console.log(
+        //   `${resultToString(trimmed[i])} dominates ${resultToString(
+        //     trimmed[j]
+        //   )}`
+        // );
         toRemove.add(j);
       }
     }
