@@ -1,10 +1,11 @@
 import _ from "lodash";
 
 type Player = "P1" | "P2";
+type Outcome = Player | null;
 
 type FinalResult = {
   kind: "final";
-  result: Player | null;
+  result: Outcome;
   path: number[];
 };
 
@@ -49,7 +50,7 @@ function union<T>(...sets: Set<T>[]): Set<T> {
   return result;
 }
 
-function allFinals(result: Result): Set<Player | null> {
+function allFinals(result: Result): Set<Outcome> {
   if (result.kind === "final") {
     return new Set([result.result]);
   }
@@ -64,6 +65,18 @@ function resultToString(result: Result, indent: number = 0): string {
   return `${indentString}${result.chooser}->(\n${result.choices
     .map((c) => resultToString(c, indent + 2))
     .join("\n")}\n${indentString})`;
+}
+
+function compareResult(a: Result, b: Result): number {
+  return resultToString(a).localeCompare(resultToString(b));
+}
+
+function splitTypes(results: Result[]): [FinalResult[], ChoiceResult[]] {
+  const finals = results.filter((r): r is FinalResult => r.kind === "final");
+  const nonFinals = results.filter(
+    (r): r is ChoiceResult => r.kind === "choice"
+  );
+  return [finals, nonFinals];
 }
 
 type Board = Array<Player | null>;
@@ -127,20 +140,32 @@ function result(
       }
     }
   }
+  return trimResult(
+    {
+      kind: "choice",
+      chooser: toPlay,
+      choices: possibles,
+    },
+    dominator
+  );
+}
+
+function trimResult(result: Result, dominator: Dominator): Result {
+  if (result.kind === "final") {
+    return result;
+  }
   const uniquePossibles = trimPossibles(
-    _.uniqWith(possibles, eq),
+    _.uniqWith(result.choices, eq),
     dominator,
-    toPlay
+    result.chooser
   );
   if (uniquePossibles.length === 1) {
     return uniquePossibles[0];
   }
   return {
     kind: "choice",
-    chooser: toPlay,
-    choices: uniquePossibles.sort((a, b) =>
-      resultToString(a).localeCompare(resultToString(b))
-    ),
+    chooser: result.chooser,
+    choices: uniquePossibles.sort(compareResult),
   };
 }
 
@@ -149,10 +174,7 @@ function trimPossibles(
   dominator: Dominator,
   player: Player
 ): Result[] {
-  const finals = results.filter((r): r is FinalResult => r.kind === "final");
-  const nonFinals = results.filter(
-    (r): r is ChoiceResult => r.kind === "choice"
-  );
+  const [finals, nonFinals] = splitTypes(results);
   const trimmed: Result[] = [...finals];
   for (const nonFinal of nonFinals) {
     const subFinals = [...allFinals(nonFinal)];
@@ -220,7 +242,7 @@ function choicesDominate(a: Result, b: Result) {
   return false;
 }
 
-function playerWantsResult(player: Player, desired: Player | null): Dominator {
+function playerWantsResult(player: Player, desired: Outcome): Dominator {
   return (a, b, p) => {
     if (choicesDominate(a, b)) {
       return true;
@@ -246,14 +268,28 @@ function playerWantsResult(player: Player, desired: Player | null): Dominator {
   };
 }
 
-console.log(
-  resultToString(
-    result(
-      [null, null, null, null, null, null, null, null, null],
-      [],
-      "P1",
-      // normalTicTacToe
-      playerWantsResult("P1", "P1")
+for (const [player, want] of [
+  ["P1", "P1"],
+  ["P1", "P2"],
+  ["P1", null],
+  ["P2", "P1"],
+  ["P2", "P2"],
+  ["P2", null],
+] as const) {
+  console.log(`
+  ****
+  **** ${player} wants ${want}
+  ****
+  `);
+  console.log(
+    resultToString(
+      result(
+        [null, null, null, null, null, null, null, null, null],
+        [],
+        "P1",
+        // normalTicTacToe
+        playerWantsResult(player, want)
+      )
     )
-  )
-);
+  );
+}
