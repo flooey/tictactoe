@@ -104,12 +104,7 @@ function winner(board: Board): Player | null {
 
 type Dominator = (a: Result, b: Result, p: Player) => boolean;
 
-function result(
-  board: Board,
-  path: number[],
-  toPlay: Player,
-  dominator: Dominator
-): Result {
+function result(board: Board, path: number[], toPlay: Player): Result {
   const won = winner(board);
   if (won) {
     return {
@@ -133,20 +128,16 @@ function result(
       const newResult = result(
         newBoard,
         [...path, i],
-        toPlay === "P1" ? "P2" : "P1",
-        dominator
+        toPlay === "P1" ? "P2" : "P1"
       );
       possibles.push(newResult);
     }
   }
-  return trimResult(
-    {
-      kind: "choice",
-      chooser: toPlay,
-      choices: possibles,
-    },
-    dominator
-  );
+  return {
+    kind: "choice",
+    chooser: toPlay,
+    choices: possibles,
+  };
 }
 
 function trimResult(result: Result, dominator: Dominator): Result {
@@ -202,6 +193,33 @@ function trimPossibles(
     }
   }
   return trimmed.filter((_, i) => !toRemove.has(i));
+}
+
+function reduce(
+  result: Result,
+  dominator: Dominator,
+  p1Declined: Set<Outcome>,
+  p2Declined: Set<Outcome>
+): Result {
+  if (result.kind === "final") {
+    return result;
+  }
+  const [finals, nonFinals] = splitTypes(result.choices);
+  const [newP1Declined, newP2Declined] =
+    result.chooser === "P1"
+      ? [new Set([...p1Declined, ...finals.map((f) => f.result)]), p2Declined]
+      : [p1Declined, new Set([...p2Declined, ...finals.map((f) => f.result)])];
+  const reduced = nonFinals.map((c) =>
+    reduce(c, dominator, newP1Declined, newP2Declined)
+  );
+  return trimResult(
+    {
+      kind: "choice",
+      chooser: result.chooser,
+      choices: [...finals, ...reduced],
+    },
+    dominator
+  );
 }
 
 function normalTicTacToe(a: Result, b: Result, p: Player) {
@@ -285,12 +303,16 @@ for (const [player, want] of [
   `);
   console.log(
     resultToString(
-      result(
-        [null, null, null, null, null, null, null, null, null],
-        [],
-        "P1",
+      reduce(
+        result(
+          [null, null, null, null, null, null, null, null, null],
+          [],
+          "P1"
+        ),
         // normalTicTacToe
-        playerWantsResult(player, want)
+        playerWantsResult(player, want),
+        new Set(),
+        new Set()
       )
     )
   );
