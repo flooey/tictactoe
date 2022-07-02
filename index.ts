@@ -136,11 +136,7 @@ function result(
         toPlay === "P1" ? "P2" : "P1",
         dominator
       );
-      if (newResult.kind === "choice" && newResult.chooser === toPlay) {
-        possibles.push(...newResult.choices);
-      } else {
-        possibles.push(newResult);
-      }
+      possibles.push(newResult);
     }
   }
   return trimResult(
@@ -157,18 +153,21 @@ function trimResult(result: Result, dominator: Dominator): Result {
   if (result.kind === "final") {
     return result;
   }
-  const uniquePossibles = trimPossibles(
-    _.uniqWith(result.choices, eq),
+  const possibles = result.choices.flatMap((c) =>
+    c.kind === "choice" && c.chooser === result.chooser ? c.choices : [c]
+  );
+  const trimmedPossibles = trimPossibles(
+    _.uniqWith(possibles, eq),
     dominator,
     result.chooser
   );
-  if (uniquePossibles.length === 1) {
-    return uniquePossibles[0];
+  if (trimmedPossibles.length === 1) {
+    return trimmedPossibles[0];
   }
   return {
     kind: "choice",
     chooser: result.chooser,
-    choices: uniquePossibles.sort(compareResult),
+    choices: trimmedPossibles.sort(compareResult),
   };
 }
 
